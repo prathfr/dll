@@ -92,6 +92,8 @@
 #include "Modules/JavaDynamicFOV/JavaDynamicFOV.hpp"
 #include "Modules/ItemUseDelayFix/ItemUseDelayFix.hpp"
 
+#include "Modules/ServerTweaks/ServerTweaks.hpp"
+
 namespace ModuleManager {
     std::map<size_t, std::shared_ptr<Module>> moduleMap;
     std::vector<std::shared_ptr<Listener>> services;
@@ -190,6 +192,8 @@ void ModuleManager::initialize() {
     addModule<Cursor>();
     addModule<RawInputBuffer>();
     //addModule<ItemUseDelayFix>();
+
+    addModule<ServerTweaks>();
 
     addService<GUIKeyListener>();
     addService<DiscordRPCListener>();
