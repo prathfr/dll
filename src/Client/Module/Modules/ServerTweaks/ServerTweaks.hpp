@@ -5,7 +5,8 @@
 #include "../../../../Utils/Utils.hpp"
 #include "../../../../Config/json/json.hpp"
 #include <string>
-//#include <windows.h>
+#include <windows.h>
+#include <wininet.h>
 #include <regex>
 #include <format>
 #include <chrono>
@@ -18,13 +19,19 @@ typedef unordered_map<string, string> strStrMap;
 
 
 
-string round_places(auto value, int places) {
+string round_places(const auto value, const int& places) {
     string value2 = to_string(value);
     return value2.substr(0, value2.find(".") + 1 + places);
 }
 
-string fixFormatting(string str) {
-    return regex_replace(str, regex("Â§"), "\u00A7");
+string fixFormatting(const string str) {
+    string res;
+    for (char i : str) {
+        if (i != '\u00C2') { // Â
+            res += i;
+        }
+    }
+    return res;
 }
 
 /*
@@ -33,7 +40,6 @@ string removeFormatting(string str) {
 }
 */
 
-/*
 void copyToClipboard(string str) {
     if (OpenClipboard(nullptr)) {
         EmptyClipboard();
@@ -45,7 +51,36 @@ void copyToClipboard(string str) {
         }
     }
 }
-*/
+
+string GetString(const string& URL) {
+    HINTERNET interwebs = InternetOpenA("Samsung Smart Fridge", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, NULL);
+    HINTERNET urlFile;
+    string rtn;
+
+    if (interwebs) {
+        urlFile = InternetOpenUrlA(interwebs, URL.c_str(), NULL, NULL, INTERNET_FLAG_RELOAD, 0);
+
+        if (urlFile) {
+            const string header = "User-Agent: MyCustomUserAgent\r\n"
+                "Accept: application/json\r\n";
+
+            HttpAddRequestHeadersA(urlFile, header.c_str(), header.length(), HTTP_ADDREQ_FLAG_ADD);
+
+            // Send the request with headers (HttpSendRequest is called implicitly during InternetOpenUrlA)
+            char buffer[2000];
+            DWORD bytesRead;
+            do {
+                InternetReadFile(urlFile, buffer, 2000, &bytesRead);
+                rtn.append(buffer, bytesRead);
+                memset(buffer, 0, 2000);
+            } while (bytesRead);
+            InternetCloseHandle(urlFile);
+        }
+        InternetCloseHandle(interwebs);
+    }
+
+    return rtn;
+}
 
 
 
@@ -54,31 +89,65 @@ class MessageParser {
 public:
 
     strStrMap nethergames(string mesg) {
-        const string triggerMesg = " \u00A7ehas joined ";
-        const size_t joinIndex = mesg.find(triggerMesg);
-        if (joinIndex == string::npos) {
+        const string triggerMesg = " §ehas joined ";
+        const size_t loc = mesg.find(triggerMesg);
+        if (loc == string::npos) {
             return {
                 { "passed", "false" }
             };
         }
         else {
-            const string playerCount = mesg.substr(joinIndex + triggerMesg.length(), mesg.length() - 1);
+            const string playerCount = mesg.substr(loc + triggerMesg.length(), mesg.length() - 1);
             const size_t slashIndex = playerCount.find("\/");
             return {
                 { "passed", "true" },
-                { "name", mesg.substr(3, joinIndex - 3) },
+                { "name", mesg.substr(3, loc - 3) },
                 { "team_color", mesg.substr(2, 1) },
                 { "player_count", playerCount },
                 { "players_total", playerCount.substr(slashIndex + 4, playerCount.length() - slashIndex - 6) },
-                { "end_of_mesg", mesg.substr(joinIndex) }
+                { "end_of_mesg", mesg.substr(loc) }
             };
         }
     }
 
-    strStrMap hive(string mesg) {
-        return {
-            { "", "" }
-        };
+    strStrMap hiveGamemode(string mesg) {
+        const string triggerMesg = "§b§l» §r§7§7Finding you a game of ";
+        const size_t loc = mesg.find(triggerMesg);
+        if (loc == string::npos) {
+            return {
+                { "passed", "false"}
+            };
+        }
+        else {
+            return {
+                { "passed", "true" },
+                { "gamemode", mesg.substr(loc, mesg.length() - 3) }
+            };
+        }
+    }
+
+    // §a§l» §r§7AnshgamerYT8183 joined.§8[6 / 8]
+    strStrMap hivePlayer(string mesg) {
+        const string triggerMesg1 = "§a§l» §r";
+        const string triggerMesg2 = " joined.§8";
+        const size_t loc1 = mesg.find(triggerMesg1);
+        const size_t loc2 = mesg.find(triggerMesg2);
+        if (loc1 == string::npos || loc2 == string::npos) {
+            return {
+                { "passed", "false"}
+            };
+        }
+        else {
+            const string playerCount = mesg.substr(loc2);
+            const size_t slashIndex = mesg.find("\/");
+            // [6 / 8]
+            // 3 , 7
+            return {
+                { "passed", "true" },
+                { "name", mesg.substr(loc1, loc2) },
+                { "players_total", playerCount.substr(slashIndex + 1, playerCount.length() - slashIndex - 2 ) }
+            };
+        }
     }
 
 };
@@ -89,7 +158,7 @@ class NGClass {
 
 private:
 
-    string get_unicode(string type, string arg) {
+    string get_unicode(const string& type, const string& arg) {
         if (type == "tier") {
             static strStrMap tier_unicodes = {
                 { "Diamond", "\uE1A7" },
@@ -128,7 +197,7 @@ private:
         }
     }
 
-    string get_team(string teamColor, int playersTotal) {
+    string get_team(const string& teamColor, const int& playersTotal) {
         const int acceptablePlayerCounts[3] = { 8, 16, 20 };
         static strStrMap teamColorDict = {
             { "c", "R" },
@@ -144,14 +213,14 @@ private:
             find(begin(acceptablePlayerCounts), end(acceptablePlayerCounts), playersTotal) == end(acceptablePlayerCounts)
             || !teamColorDict.contains(teamColor)
             ) {
-            return format("\u00A7r\u00A7{}", teamColor);
+            return format("§r§{}", teamColor);
         }
         else {
-            return format("\u00A7r\u00A7l\u00A7{}{} \u00A7r\u00A7{}", teamColor, teamColorDict[teamColor], teamColor);
+            return format("§r§l§{}{} §r§{}", teamColor, teamColorDict[teamColor], teamColor);
         }
     }
 
-    strStrMap get_stats(string playerName, bool useUnicode) {
+    strStrMap get_stats(const string& playerName, const bool& useUnicode) {
         const json respJson = json::parse(Utils::DownloadString(format("https://api.ngmc.co/v1/players/{}?withFactionData=false&withOnline=false&withPunishments=false&withVoteStatus=false&withGuildData=true", regex_replace(playerName, regex("/ +/"), "\%20"))));
 
         strStrMap stats = {};
@@ -172,24 +241,26 @@ private:
 
             string tier = to_string(respJson["tier"]);
             if (tier.size() > 0) {
-                tier = tier.substr(1, tier.length() - 2) + " ";
+                tier = tier.substr(1, tier.length() - 2);
             }
 
             string rank = "";
             if (respJson["ranks"].size() > 0) {
                 rank = to_string(respJson["ranks"][0]);
-                rank = rank.substr(1, rank.length() - 2) + " ";
+                rank = rank.substr(1, rank.length() - 2);
             }
 
             if (useUnicode) {
                 tier = get_unicode("tier", tier);
                 rank = get_unicode("rank", rank);
             }
+            tier = tier + " ";
+            rank = rank + " ";
 
             string guild = "";
             if (respJson["guildData"].size() > 0) {
                 guild = to_string(respJson["guildData"]["rawTag"]);
-                guild = " \u00A7l" + guild.substr(1, guild.length() - 2);
+                guild = " §l" + guild.substr(1, guild.length() - 2);
             }
 
             stats = {
@@ -209,17 +280,17 @@ private:
 
 public:
 
-    bool print_stats(strStrMap parsed_message, bool useUnicodes) {
+    bool print_stats(static strStrMap& parsed_message, const bool& useUnicodes) {
         auto start = chrono::high_resolution_clock::now();
         strStrMap stats = this->get_stats(parsed_message["name"], useUnicodes);
         auto elapsed = duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now() - start);
         string team_text = this->get_team(parsed_message["team_color"], stoi(parsed_message["players_total"]));
         if (stats["nicked"] == "true") {
-            SDK::clientInstance->getGuiData()->displayClientMessage(format("{}{}{} \u00A7r\u00A7cNicked", team_text, stats["name"], parsed_message["end_of_message"]));
+            SDK::clientInstance->getGuiData()->displayClientMessage(format("{}{}{} §r§cNicked", team_text, stats["name"], parsed_message["end_of_message"]));
             return true;
         }
         else {
-            SDK::clientInstance->getGuiData()->displayClientMessage(format("{} {}{}{}{} \u00A7r({}){}\u00A7r{} (\u00A7r\u00A77{}s)", stats["level"], stats["tier"], stats["rank"], team_text, stats["name"], stats["kdr"], stats["guild"], parsed_message["end_of_message"], round_places(elapsed.count() / 1000.0, 2)));
+            SDK::clientInstance->getGuiData()->displayClientMessage(format("{} {}{}{}{} §r({}){}§r{} (§r§7{}s)", stats["level"], stats["tier"], stats["rank"], team_text, stats["name"], stats["kdr"], stats["guild"], parsed_message["end_of_message"], round_places(elapsed.count() / 1000.0, 2)));
             return true;
         }
         return false;
@@ -293,7 +364,7 @@ public:
 
         if ( SDK::getServerIP().find("nethergames") != string::npos || settings.getSettingByName<bool>("debugMode")->value ) {
 
-            strStrMap parsed_message = Parser.nethergames(fixFormatting(pkt->message));
+            static strStrMap parsed_message = Parser.nethergames(fixFormatting(pkt->message));
 
             if (parsed_message["passed"] == "true") {
                 NGClass NG;
@@ -306,6 +377,18 @@ public:
         }
         else if ( SDK::getServerIP().find("hivebedrock") != string::npos || settings.getSettingByName<bool>("debugMode")->value ) {
 
+            static strStrMap parsed_gamemode = Parser.hiveGamemode(fixFormatting(pkt->message));
+
+            if (parsed_gamemode["passed"] == "true") {
+                SDK::clientInstance->getGuiData()->displayClientMessage(parsed_gamemode["gamemode"]);
+            }
+
+            static strStrMap parsed_message = Parser.hivePlayer(fixFormatting(pkt->message));
+
+            if (parsed_message["passed"] == "true") {
+                SDK::clientInstance->getGuiData()->displayClientMessage(parsed_message["players_total"] + "| |" + parsed_message["name"]);
+            }
+
         }
 
     }
@@ -314,4 +397,5 @@ public:
 };
 
 // §cPrathpro17 §ehas joined (§b5§e/§b8§e)!
-
+// Â§bÂ§lÂ» Â§rÂ§7Â§7Finding you a game of BedWars...
+// Â§aÂ§lÂ» Â§rÂ§7AnshgamerYT8183 joined.Â§8[6 / 8]
