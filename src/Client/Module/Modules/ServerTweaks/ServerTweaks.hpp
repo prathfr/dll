@@ -27,11 +27,15 @@ string round_places(const auto value, const int& places) {
 string fixFormatting(const string str) {
     string res;
     for (char i : str) {
-        if (i != '\u00C2') { // Â
+        if (i != '\u00C2') {
             res += i;
         }
     }
     return res;
+}
+
+string URLencodeIGN(const string ign) {
+    return regex_replace(ign, regex("/ +/"), "\%20");
 }
 
 /*
@@ -81,76 +85,6 @@ string GetString(const string& URL) {
 
     return rtn;
 }
-
-
-
-class MessageParser {
-
-public:
-
-    strStrMap nethergames(string mesg) {
-        const string triggerMesg = " §ehas joined ";
-        const size_t loc = mesg.find(triggerMesg);
-        if (loc == string::npos) {
-            return {
-                { "passed", "false" }
-            };
-        }
-        else {
-            const string playerCount = mesg.substr(loc + triggerMesg.length(), mesg.length() - 1);
-            const size_t slashIndex = playerCount.find("\/");
-            return {
-                { "passed", "true" },
-                { "name", mesg.substr(3, loc - 3) },
-                { "team_color", mesg.substr(2, 1) },
-                { "player_count", playerCount },
-                { "players_total", playerCount.substr(slashIndex + 4, playerCount.length() - slashIndex - 6) },
-                { "end_of_mesg", mesg.substr(loc) }
-            };
-        }
-    }
-
-    strStrMap hiveGamemode(string mesg) {
-        const string triggerMesg = "§b§l» §r§7§7Finding you a game of ";
-        const size_t loc = mesg.find(triggerMesg);
-        if (loc == string::npos) {
-            return {
-                { "passed", "false"}
-            };
-        }
-        else {
-            return {
-                { "passed", "true" },
-                { "gamemode", mesg.substr(loc, mesg.length() - 3) }
-            };
-        }
-    }
-
-    // §a§l» §r§7AnshgamerYT8183 joined.§8[6 / 8]
-    strStrMap hivePlayer(string mesg) {
-        const string triggerMesg1 = "§a§l» §r";
-        const string triggerMesg2 = " joined.§8";
-        const size_t loc1 = mesg.find(triggerMesg1);
-        const size_t loc2 = mesg.find(triggerMesg2);
-        if (loc1 == string::npos || loc2 == string::npos) {
-            return {
-                { "passed", "false"}
-            };
-        }
-        else {
-            const string playerCount = mesg.substr(loc2);
-            const size_t slashIndex = mesg.find("\/");
-            // [6 / 8]
-            // 3 , 7
-            return {
-                { "passed", "true" },
-                { "name", mesg.substr(loc1, loc2) },
-                { "players_total", playerCount.substr(slashIndex + 1, playerCount.length() - slashIndex - 2 ) }
-            };
-        }
-    }
-
-};
 
 
 
@@ -221,9 +155,9 @@ private:
     }
 
     strStrMap get_stats(const string& playerName, const bool& useUnicode) {
-        const json respJson = json::parse(Utils::DownloadString(format("https://api.ngmc.co/v1/players/{}?withFactionData=false&withOnline=false&withPunishments=false&withVoteStatus=false&withGuildData=true", regex_replace(playerName, regex("/ +/"), "\%20"))));
+        const json respJson = json::parse(Utils::DownloadString(format("https://api.ngmc.co/v1/players/{}?withFactionData=false&withOnline=false&withPunishments=false&withVoteStatus=false&withGuildData=true", URLencodeIGN(playerName))));
 
-        strStrMap stats = {};
+        strStrMap stats;
 
         if (respJson.contains("code") && respJson.contains("message")) {
             if (respJson["code"] == 10012 && respJson["message"] == "Unknown Player") {
@@ -302,6 +236,155 @@ public:
 
 class HiveClass {
 
+private:
+
+    strStrMap get_stats(const string& playerName, const string& gamemode_key) {
+        const json respJson = json::parse(Utils::DownloadString(format("https://api.playhive.com/v0/game/all/{}/{}", gamemode_key, URLencodeIGN(playerName))));
+
+        int kills = respJson["kills"];
+        int deaths = respJson["deaths"];
+        string akdr;
+        if (deaths == 0) {
+            akdr = to_string(kills);
+        }
+        else {
+            akdr = round_places(kills / (deaths * 1.0), 2);
+        }
+        strStrMap stats = {
+            { "xp", respJson["xp"] },
+            { "games_total", respJson["played"] },
+            { "games_won", respJson["victories"] },
+            { "total_kills", to_string(kills) },
+            { "total_deaths", to_string(deaths) },
+            { "akdr", akdr }
+        };
+
+        if (gamemode_key == "bed") {
+
+            stats["final_kills"] = respJson["final_kills"];
+            stats["beds"] = respJson["beds_destroyed"];
+
+        }
+        else if (gamemode_key == "sky") {
+
+            stats["chests"] = respJson["mystery_chests_destroyed"];
+            stats["ores"] = respJson["ores_mined"];
+            stats["spells"] = respJson["spells_used"];
+
+        }
+
+    }
+
+public:
+
+    strStrMap gamemode_keys = {
+            { "BedWars", "bed" },
+            { "BED", "bed" },
+            { "SkyWars", "sky" },
+            { "SKY", "sky" }
+    };
+    string current_gamemode = "";
+    string current_gamemode_key = "";
+
+    bool print_stats(static strStrMap& parsed_message) {
+        strStrMap stats = this->get_stats(parsed_message["name"], this->current_gamemode_key);
+
+        SDK::clientInstance->getGuiData()->displayClientMessage(stats["kills"] + "| |" + stats["deaths"] + "| |" + stats["akdr"]);
+
+        return false;
+
+    }
+
+};
+
+
+
+NGClass NG;
+HiveClass Hive;
+
+
+
+class MessageParser {
+
+public:
+
+    strStrMap nethergames(string mesg) {
+        const string triggerMesg = " §ehas joined ";
+        const size_t loc = mesg.find(triggerMesg);
+        if (loc == string::npos) {
+            return {
+                { "passed", "false" },
+                { "original_message", mesg }
+            };
+        }
+        else {
+            const string playerCount = mesg.substr(loc + triggerMesg.length(), mesg.length() - 1);
+            const size_t slashIndex = playerCount.find("\/");
+            return {
+                { "passed", "true" },
+                { "name", mesg.substr(3, loc - 3) },
+                { "team_color", mesg.substr(2, 1) },
+                { "player_count", playerCount },
+                { "players_total", playerCount.substr(slashIndex + 4, playerCount.length() - slashIndex - 6) },
+                { "end_of_mesg", mesg.substr(loc) },
+                { "original_message", mesg }
+            };
+        }
+    }
+
+    strStrMap hiveGamemode(string mesg) {
+        const string triggerMesg = "§b§l» §r§7§7Finding you a game of ";
+        const size_t loc = mesg.find(triggerMesg);
+        const string gamemode = mesg.substr(loc, mesg.length() - 3);
+        if (loc == string::npos) {
+            return strStrMap {
+                { "passed", "false"},
+                { "original_message", mesg }
+            };
+        }
+        else {
+            Hive.current_gamemode = gamemode;
+            Hive.current_gamemode_key = Hive.gamemode_keys[gamemode];
+            return strStrMap {
+                { "passed", "true" },
+                { "gamemode", gamemode },
+                { "gamemode_key", Hive.gamemode_keys[gamemode] },
+                { "original_message", mesg }
+            };
+        }
+    }
+
+    void hiveGamemodeLite(string mesg) {
+        const string triggerMesg = "§b§l» §r§7§7Finding you a game of ";
+        const size_t loc = mesg.find(triggerMesg);
+        const string gamemode = mesg.substr(loc, mesg.length() - 3);
+        if (loc != string::npos) {
+            Hive.current_gamemode = gamemode;
+            Hive.current_gamemode_key = Hive.gamemode_keys[gamemode];
+        }
+    }
+
+    strStrMap hivePlayer(string mesg) {
+        const string triggerMesg1 = "§a§l» §r";
+        const string triggerMesg2 = " joined.§8";
+        const size_t loc1 = mesg.find(triggerMesg1);
+        const size_t loc2 = mesg.find(triggerMesg2);
+        if (loc1 == string::npos || loc2 == string::npos) {
+            return {
+                { "passed", "false"}
+            };
+        }
+        else {
+            const string playerCount = mesg.substr(loc2);
+            const size_t slashIndex = mesg.find("\/");
+            return {
+                { "passed", "true" },
+                { "name", mesg.substr(loc1, loc2) },
+                { "players_total", playerCount.substr(slashIndex + 1, playerCount.length() - slashIndex - 2) }
+            };
+        }
+    }
+
 };
 
 
@@ -367,7 +450,6 @@ public:
             static strStrMap parsed_message = Parser.nethergames(fixFormatting(pkt->message));
 
             if (parsed_message["passed"] == "true") {
-                NGClass NG;
                 bool printed = NG.print_stats(parsed_message, settings.getSettingByName<bool>("useUnicodes")->value);
                 if (printed) {
                     event.cancel();
@@ -377,16 +459,21 @@ public:
         }
         else if ( SDK::getServerIP().find("hivebedrock") != string::npos || settings.getSettingByName<bool>("debugMode")->value ) {
 
-            static strStrMap parsed_gamemode = Parser.hiveGamemode(fixFormatting(pkt->message));
+            //static strStrMap parsed_gamemode = Parser.hiveGamemode(fixFormatting(pkt->message));
+            Parser.hiveGamemodeLite(fixFormatting(pkt->message));
 
-            if (parsed_gamemode["passed"] == "true") {
+            /*if (parsed_gamemode["passed"] == "true") {
                 SDK::clientInstance->getGuiData()->displayClientMessage(parsed_gamemode["gamemode"]);
-            }
+            }*/
 
             static strStrMap parsed_message = Parser.hivePlayer(fixFormatting(pkt->message));
 
             if (parsed_message["passed"] == "true") {
-                SDK::clientInstance->getGuiData()->displayClientMessage(parsed_message["players_total"] + "| |" + parsed_message["name"]);
+                // SDK::clientInstance->getGuiData()->displayClientMessage(parsed_message["players_total"] + "| |" + parsed_message["name"]);
+                bool printed = Hive.print_stats(parsed_message);
+                if (printed) {
+                    event.cancel();
+                }
             }
 
         }
