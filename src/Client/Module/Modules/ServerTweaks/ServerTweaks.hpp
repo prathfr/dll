@@ -56,35 +56,35 @@ void copyToClipboard(string str) {
     }
 }
 
-string GetString(const string& URL) {
-    HINTERNET interwebs = InternetOpenA("Samsung Smart Fridge", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, NULL);
-    HINTERNET urlFile;
-    string rtn;
-
-    if (interwebs) {
-        urlFile = InternetOpenUrlA(interwebs, URL.c_str(), NULL, NULL, INTERNET_FLAG_RELOAD, 0);
-
-        if (urlFile) {
-            const string header = "User-Agent: MyCustomUserAgent\r\n"
-                "Accept: application/json\r\n";
-
-            HttpAddRequestHeadersA(urlFile, header.c_str(), header.length(), HTTP_ADDREQ_FLAG_ADD);
-
-            // Send the request with headers (HttpSendRequest is called implicitly during InternetOpenUrlA)
-            char buffer[2000];
-            DWORD bytesRead;
-            do {
-                InternetReadFile(urlFile, buffer, 2000, &bytesRead);
-                rtn.append(buffer, bytesRead);
-                memset(buffer, 0, 2000);
-            } while (bytesRead);
-            InternetCloseHandle(urlFile);
-        }
-        InternetCloseHandle(interwebs);
-    }
-
-    return rtn;
-}
+//string GetString(const string& URL) {
+//    HINTERNET interwebs = InternetOpenA("Samsung Smart Fridge", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, NULL);
+//    HINTERNET urlFile;
+//    string rtn;
+//
+//    if (interwebs) {
+//        urlFile = InternetOpenUrlA(interwebs, URL.c_str(), NULL, NULL, INTERNET_FLAG_RELOAD, 0);
+//
+//        if (urlFile) {
+//            const string header = "User-Agent: MyCustomUserAgent\r\n"
+//                "Accept: application/json\r\n";
+//
+//            HttpAddRequestHeadersA(urlFile, header.c_str(), header.length(), HTTP_ADDREQ_FLAG_ADD);
+//
+//            // Send the request with headers (HttpSendRequest is called implicitly during InternetOpenUrlA)
+//            char buffer[2000];
+//            DWORD bytesRead;
+//            do {
+//                InternetReadFile(urlFile, buffer, 2000, &bytesRead);
+//                rtn.append(buffer, bytesRead);
+//                memset(buffer, 0, 2000);
+//            } while (bytesRead);
+//            InternetCloseHandle(urlFile);
+//        }
+//        InternetCloseHandle(interwebs);
+//    }
+//
+//    return rtn;
+//}
 
 
 
@@ -92,7 +92,7 @@ class NGClass {
 
 private:
 
-    string get_unicode(const string& type, const string& arg) {
+    static string get_unicode(const string& type, const string& arg) {
         if (type == "tier") {
             static strStrMap tier_unicodes = {
                 { "Diamond", "\uE1A7" },
@@ -131,7 +131,7 @@ private:
         }
     }
 
-    string get_team(const string& teamColor, const int& playersTotal) {
+    static string get_team(const string& teamColor, const int& playersTotal) {
         const int acceptablePlayerCounts[3] = { 8, 16, 20 };
         static strStrMap teamColorDict = {
             { "c", "R" },
@@ -154,7 +154,7 @@ private:
         }
     }
 
-    strStrMap get_stats(const string& playerName, const bool& useUnicode) {
+    static strStrMap get_stats(const string& playerName, const bool& useUnicode) {
         const json respJson = json::parse(Utils::DownloadString(format("https://api.ngmc.co/v1/players/{}?withFactionData=false&withOnline=false&withPunishments=false&withVoteStatus=false&withGuildData=true", URLencodeIGN(playerName))));
 
         strStrMap stats;
@@ -214,11 +214,11 @@ private:
 
 public:
 
-    bool print_stats(static strStrMap& parsed_message, const bool& useUnicodes) {
+    static bool print_stats(strStrMap& parsed_message, const bool& useUnicodes) {
         auto start = chrono::high_resolution_clock::now();
-        strStrMap stats = this->get_stats(parsed_message["name"], useUnicodes);
+        strStrMap stats = NGClass::get_stats(parsed_message["name"], useUnicodes);
         auto elapsed = duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now() - start);
-        string team_text = this->get_team(parsed_message["team_color"], stoi(parsed_message["players_total"]));
+        string team_text = NGClass::get_team(parsed_message["team_color"], stoi(parsed_message["players_total"]));
         if (stats["nicked"] == "true") {
             SDK::clientInstance->getGuiData()->displayClientMessage(format("{}{}{} §r§cNicked", team_text, stats["name"], parsed_message["end_of_message"]));
             return true;
@@ -232,13 +232,20 @@ public:
 
 };
 
-
+strStrMap gamemode_keys = {
+            { "BedWars", "bed" },
+            { "BED", "bed" },
+            { "SkyWars", "sky" },
+            { "SKY", "sky" }
+};
+string current_gamemode = "";
+string current_gamemode_key = "";
 
 class HiveClass {
 
 private:
 
-    strStrMap get_stats(const string& playerName, const string& gamemode_key) {
+    static strStrMap get_stats(const string& playerName, const string& gamemode_key) {
         const json respJson = json::parse(Utils::DownloadString(format("https://api.playhive.com/v0/game/all/{}/{}", gamemode_key, URLencodeIGN(playerName))));
 
         int kills = respJson["kills"];
@@ -277,17 +284,17 @@ private:
 
 public:
 
-    strStrMap gamemode_keys = {
+    /*strStrMap gamemode_keys = {
             { "BedWars", "bed" },
             { "BED", "bed" },
             { "SkyWars", "sky" },
             { "SKY", "sky" }
     };
     string current_gamemode = "";
-    string current_gamemode_key = "";
+    string current_gamemode_key = "";*/
 
-    bool print_stats(static strStrMap& parsed_message) {
-        strStrMap stats = this->get_stats(parsed_message["name"], this->current_gamemode_key);
+    static bool print_stats(strStrMap& parsed_message) {
+        strStrMap stats = HiveClass::get_stats(parsed_message["name"], current_gamemode_key);
 
         SDK::clientInstance->getGuiData()->displayClientMessage(stats["kills"] + "| |" + stats["deaths"] + "| |" + stats["akdr"]);
 
@@ -296,11 +303,6 @@ public:
     }
 
 };
-
-
-
-NGClass NG;
-HiveClass Hive;
 
 
 
@@ -336,33 +338,35 @@ public:
         const string triggerMesg = "§b§l» §r§7§7Finding you a game of ";
         const size_t loc = mesg.find(triggerMesg);
         const string gamemode = mesg.substr(loc, mesg.length() - 3);
+        strStrMap stats;
         if (loc == string::npos) {
-            return strStrMap {
+            stats = {
                 { "passed", "false"},
                 { "original_message", mesg }
             };
         }
         else {
-            Hive.current_gamemode = gamemode;
-            Hive.current_gamemode_key = Hive.gamemode_keys[gamemode];
-            return strStrMap {
+            current_gamemode = gamemode;
+            current_gamemode_key = gamemode_keys[gamemode];
+            stats = {
                 { "passed", "true" },
                 { "gamemode", gamemode },
-                { "gamemode_key", Hive.gamemode_keys[gamemode] },
+                { "gamemode_key", gamemode_keys[gamemode] },
                 { "original_message", mesg }
             };
         }
+        return stats;
     }
 
-    void hiveGamemodeLite(string mesg) {
+    /*void hiveGamemodeLite(string mesg) {
         const string triggerMesg = "§b§l» §r§7§7Finding you a game of ";
         const size_t loc = mesg.find(triggerMesg);
         const string gamemode = mesg.substr(loc, mesg.length() - 3);
         if (loc != string::npos) {
-            Hive.current_gamemode = gamemode;
-            Hive.current_gamemode_key = Hive.gamemode_keys[gamemode];
+            current_gamemode = gamemode;
+            current_gamemode_key = gamemode_keys[gamemode];
         }
-    }
+    }*/
 
     strStrMap hivePlayer(string mesg) {
         const string triggerMesg1 = "§a§l» §r";
@@ -450,7 +454,7 @@ public:
             static strStrMap parsed_message = Parser.nethergames(fixFormatting(pkt->message));
 
             if (parsed_message["passed"] == "true") {
-                bool printed = NG.print_stats(parsed_message, settings.getSettingByName<bool>("useUnicodes")->value);
+                bool printed = NGClass::print_stats(parsed_message, settings.getSettingByName<bool>("useUnicodes")->value);
                 if (printed) {
                     event.cancel();
                 }
@@ -459,18 +463,18 @@ public:
         }
         else if ( SDK::getServerIP().find("hivebedrock") != string::npos || settings.getSettingByName<bool>("debugMode")->value ) {
 
-            //static strStrMap parsed_gamemode = Parser.hiveGamemode(fixFormatting(pkt->message));
-            Parser.hiveGamemodeLite(fixFormatting(pkt->message));
+            static strStrMap parsed_gamemode = Parser.hiveGamemode(fixFormatting(pkt->message));
+            //Parser.hiveGamemodeLite(fixFormatting(pkt->message));
 
-            /*if (parsed_gamemode["passed"] == "true") {
+            if (parsed_gamemode["passed"] == "true") {
                 SDK::clientInstance->getGuiData()->displayClientMessage(parsed_gamemode["gamemode"]);
-            }*/
+            }
 
             static strStrMap parsed_message = Parser.hivePlayer(fixFormatting(pkt->message));
 
             if (parsed_message["passed"] == "true") {
                 // SDK::clientInstance->getGuiData()->displayClientMessage(parsed_message["players_total"] + "| |" + parsed_message["name"]);
-                bool printed = Hive.print_stats(parsed_message);
+                bool printed = HiveClass::print_stats(parsed_message);
                 if (printed) {
                     event.cancel();
                 }
