@@ -280,6 +280,8 @@ private:
 
         }
 
+        return stats;
+
     }
 
 public:
