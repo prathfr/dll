@@ -232,6 +232,8 @@ public:
 
 };
 
+
+
 strStrMap gamemode_keys = {
             { "BedWars", "bed" },
             { "BED", "bed" },
@@ -240,6 +242,8 @@ strStrMap gamemode_keys = {
 };
 string current_gamemode = "";
 string current_gamemode_key = "";
+
+
 
 class HiveClass {
 
@@ -250,12 +254,12 @@ private:
 
         int kills = respJson["kills"];
         int deaths = respJson["deaths"];
-        string akdr;
+        string akadr;
         if (deaths == 0) {
-            akdr = to_string(kills);
+            akadr = to_string(kills);
         }
         else {
-            akdr = round_places(kills / (deaths * 1.0), 2);
+            akadr = round_places(kills / (deaths * 1.0), 2);
         }
         strStrMap stats = {
             { "xp", respJson["xp"] },
@@ -263,22 +267,19 @@ private:
             { "games_won", respJson["victories"] },
             { "total_kills", to_string(kills) },
             { "total_deaths", to_string(deaths) },
-            { "akdr", akdr }
+            { "akadr", akadr }
         };
 
-        if (gamemode_key == "bed") {
-
+        /*if (gamemode_key == "bed") {
             stats["final_kills"] = respJson["final_kills"];
             stats["beds"] = respJson["beds_destroyed"];
 
         }
         else if (gamemode_key == "sky") {
-
             stats["chests"] = respJson["mystery_chests_destroyed"];
             stats["ores"] = respJson["ores_mined"];
             stats["spells"] = respJson["spells_used"];
-
-        }
+        }*/
 
         return stats;
 
@@ -286,22 +287,10 @@ private:
 
 public:
 
-    /*strStrMap gamemode_keys = {
-            { "BedWars", "bed" },
-            { "BED", "bed" },
-            { "SkyWars", "sky" },
-            { "SKY", "sky" }
-    };
-    string current_gamemode = "";
-    string current_gamemode_key = "";*/
-
     static bool print_stats(strStrMap& parsed_message) {
         strStrMap stats = HiveClass::get_stats(parsed_message["name"], current_gamemode_key);
-
-        SDK::clientInstance->getGuiData()->displayClientMessage(stats["kills"] + "| |" + stats["deaths"] + "| |" + stats["akdr"]);
-
-        return false;
-
+        SDK::clientInstance->getGuiData()->displayClientMessage(format("{}{} ({} kills, {} deaths, {} akadr) {}", parsed_message["start_of_message"], parsed_message["name"], stats["kills"], stats["deaths"], stats["akdr"], parsed_message["end_of_message"]));
+        return true;
     }
 
 };
@@ -377,7 +366,8 @@ public:
         const size_t loc2 = mesg.find(triggerMesg2);
         if (loc1 == string::npos || loc2 == string::npos) {
             return {
-                { "passed", "false"}
+                { "passed", "false" },
+                { "original_message", mesg }
             };
         }
         else {
@@ -386,7 +376,10 @@ public:
             return {
                 { "passed", "true" },
                 { "name", mesg.substr(loc1, loc2) },
-                { "players_total", playerCount.substr(slashIndex + 1, playerCount.length() - slashIndex - 2) }
+                { "players_total", playerCount.substr(slashIndex + 1, playerCount.length() - slashIndex - 2) },
+                { "start_of_message", mesg.substr(0, loc1 + 1) },
+                { "end_of_message", mesg.substr(loc2) },
+                { "original_message", mesg }
             };
         }
     }
@@ -490,5 +483,5 @@ public:
 };
 
 // §cPrathpro17 §ehas joined (§b5§e/§b8§e)!
-// Â§bÂ§lÂ» Â§rÂ§7Â§7Finding you a game of BedWars...
-// Â§aÂ§lÂ» Â§rÂ§7AnshgamerYT8183 joined.Â§8[6 / 8]
+// §b§l» §r§7§7Finding you a game of BedWars...
+// §a§l» §r§7AnshgamerYT8183 joined.§8[6 / 8]
