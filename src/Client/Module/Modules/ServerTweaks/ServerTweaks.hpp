@@ -361,7 +361,7 @@ public:
 
     strStrMap hivePlayer(string mesg) {
         const string triggerMesg1 = "§a§l» §r";
-        const string triggerMesg2 = " joined.§8";
+        const string triggerMesg2 = " joined.§8 ";
         const size_t loc1 = mesg.find(triggerMesg1);
         const size_t loc2 = mesg.find(triggerMesg2);
         if (loc1 == string::npos || loc2 == string::npos) {
@@ -484,4 +484,4 @@ public:
 
 // §cPrathpro17 §ehas joined (§b5§e/§b8§e)!
 // §b§l» §r§7§7Finding you a game of BedWars...
-// §a§l» §r§7AnshgamerYT8183 joined.§8[6 / 8]
+// §a§l» §r§7Prathpro17 joined.§8 [6 / 8]
